@@ -1,0 +1,38 @@
+# Binaries and Object files
+*.exe
+*.dll
+*.o
+*.obj
+*.pdb
+*.a
+
+# Archives
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+
+# Toolchains and Environment
+w64devkit/
+raylib/
+.vscode/
+.idea/
+
+# Output and Logs
+output.txt
+output_ascii.txt
+metrics.csv
+*.log
+
+# Screenshots
+screenshot*.png
+
+# System Files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Temporary files
+*.tmp
+*~
