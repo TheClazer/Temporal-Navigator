@@ -11,8 +11,8 @@
 #define INF DBL_MAX
 #define SAFETY_BUFFER 3.0
 
-const int SCREEN_WIDTH = 1400;   // was 1200: +200 for a roomier analysis rail
-const int SCREEN_HEIGHT = 920;   // was 800:  +120 for the bottom analysis bar
+const int SCREEN_WIDTH = 1460;   // wide enough for a roomy full-height analysis rail
+const int SCREEN_HEIGHT = 980;   // L-shaped layout: grid top-left, analysis strip below it
 const int CELL_SIZE = 15;        // UNCHANGED: grid box stays x[50..800], y[50..800]
 
 // ---------------------------------------------------------------------------
@@ -29,8 +29,8 @@ const int CELL_SIZE = 15;        // UNCHANGED: grid box stays x[50..800], y[50..
 #define COL_WALL          (Color){ 96, 104, 130, 255 }
 // Text
 #define COL_TXT           (Color){ 232, 236, 245, 255 }
-#define COL_TXT_DIM       (Color){ 150, 158, 178, 255 }
-#define COL_TXT_FAINT     (Color){ 95,  103, 124, 255 }
+#define COL_TXT_DIM       (Color){ 182, 190, 208, 255 }
+#define COL_TXT_FAINT     (Color){ 138, 148, 170, 255 }
 // Algorithm accents (Dijkstra vs A* must read as distinct)
 #define COL_DIJKSTRA      (Color){ 56,  150, 255, 255 }   // azure  -> Dijkstra
 #define COL_ASTAR         (Color){ 168, 110, 255, 255 }   // violet -> A*
@@ -140,6 +140,10 @@ AlgoStats cmpAstar    = {0};
 bool dijkstraExplored[ROWS][COLS] = {0};   // explored set from the comparison Dijkstra run
 bool astarExplored[ROWS][COLS]    = {0};   // explored set from the comparison A* run
 bool cmpOptimalMatch = false;              // cmpDijkstra.pathCost == cmpAstar.pathCost
+
+// UI font: a loaded anti-aliased TTF (Segoe UI / Consolas), with the raylib
+// bitmap font as a last-resort fallback. All on-screen text renders through this.
+Font g_font;
 
 // ---------------------------------------------------------------------------
 // 2. Queue & List Utils
@@ -740,44 +744,54 @@ void HandleInput() {
 // 7. UI primitives (DAA dashboard chrome)
 // ---------------------------------------------------------------------------
 
+// Text helpers: render everything through the loaded TTF (g_font) so the
+// dashboard is crisp and readable. Same call shape as DrawText/MeasureText.
+static inline float g_spacing(int size) { return (float)size / 16.0f; }
+static void DT(const char* t, int x, int y, int size, Color c) {
+    DrawTextEx(g_font, t, (Vector2){ (float)x, (float)y }, (float)size, g_spacing(size), c);
+}
+static int MT(const char* t, int size) {
+    return (int)MeasureTextEx(g_font, t, (float)size, g_spacing(size)).x;
+}
+
 // A titled card with rounded body + accent title bar. Returns the Y of the first content line.
 static int DrawPanel(int x, int y, int w, int h, const char* title, Color accent) {
     Rectangle body = { (float)x, (float)y, (float)w, (float)h };
     DrawRectangleRounded(body, 0.05f, 6, COL_PANEL);
     DrawRectangleRoundedLines(body, 0.05f, 6, 1.0f, COL_PANEL_LINE); // raylib 5.0: 5-arg
     if (title != NULL) {
-        const int TITLE_H = 26;
+        const int TITLE_H = 30;
         DrawRectangle(x + 2, y + 2, w - 4, TITLE_H, COL_PANEL_HEAD);
         DrawRectangle(x + 2, y + 2, 4, TITLE_H, accent);                 // accent tab
         DrawRectangle(x + 2, y + TITLE_H + 1, w - 4, 2, accent);         // accent underline
-        DrawText(title, x + 14, y + 8, 14, COL_TXT);
-        return y + TITLE_H + 12;
+        DT(title, x + 16, y + 8, 17, COL_TXT);
+        return y + TITLE_H + 14;
     }
-    return y + 12;
+    return y + 14;
 }
 
 // Left label (dim) + right-aligned value (bright).
 static void DrawStatRow(int x, int y, int rowW, const char* label, const char* value, Color valColor) {
-    DrawText(label, x, y, 14, COL_TXT_DIM);
-    int vw = MeasureText(value, 14);
-    DrawText(value, x + rowW - vw, y, 14, valColor);
+    DT(label, x, y, 17, COL_TXT_DIM);
+    int vw = MT(value, 17);
+    DT(value, x + rowW - vw, y, 17, valColor);
 }
 
 // A small pill/badge. Returns its width so badges can be chained.
 static int DrawBadge(int x, int y, const char* text, Color fill, Color txt) {
-    int tw = MeasureText(text, 14);
-    int padX = 10, w = tw + padX * 2, h = 24;
+    int tw = MT(text, 16);
+    int padX = 12, w = tw + padX * 2, h = 28;
     Rectangle r = { (float)x, (float)y, (float)w, (float)h };
     DrawRectangleRounded(r, 0.5f, 6, fill);
-    DrawText(text, x + padX, y + 5, 14, txt);
+    DT(text, x + padX, y + 6, 16, txt);
     return w;
 }
 
 // Legend swatch + label.
 static void DrawLegendItem(int x, int y, Color swatch, const char* label) {
-    DrawRectangle(x, y + 1, 12, 12, swatch);
-    DrawRectangleLines(x, y + 1, 12, 12, COL_PANEL_LINE);
-    DrawText(label, x + 20, y, 13, COL_TXT_DIM);
+    DrawRectangle(x, y + 1, 15, 15, swatch);
+    DrawRectangleLines(x, y + 1, 15, 15, COL_PANEL_LINE);
+    DT(label, x + 23, y, 15, COL_TXT_DIM);
 }
 
 static int CountWaterVisited(void) {
@@ -794,23 +808,23 @@ static void DrawBanner(void) {
     DrawRectangle(0, 0, SCREEN_WIDTH, 50, COL_BG_GRID);
     DrawRectangle(0, 49, SCREEN_WIDTH, 1, COL_PANEL_LINE);
 
-    DrawText("TEMPORAL NAVIGATOR", 50, 8, 24, COL_TXT);
-    DrawText("Design & Analysis of Algorithms  -  Pathfinding under Dynamic Hazards",
-             52, 34, 12, COL_TXT_DIM);
+    DT("TEMPORAL NAVIGATOR", 50, 5, 26, COL_TXT);
+    DT("Design & Analysis of Algorithms  -  Pathfinding under Dynamic Hazards",
+             52, 33, 13, COL_TXT_DIM);
 
     // Active-algorithm badge (right-aligned)
     const char* algoName = useAstarPlanner ? "A*  (INFORMED)" : "DIJKSTRA  (UNINFORMED)";
     Color accent = useAstarPlanner ? COL_ASTAR : COL_DIJKSTRA;
-    int tw = MeasureText(algoName, 14);
-    int badgeW = tw + 34;
+    int tw = MT(algoName, 15);
+    int badgeW = tw + 42;
     int bx = SCREEN_WIDTH - badgeW - 50;
-    int by = 12;
-    Rectangle br = { (float)bx, (float)by, (float)badgeW, 26 };
+    int by = 10;
+    Rectangle br = { (float)bx, (float)by, (float)badgeW, 28 };
     DrawRectangleRounded(br, 0.5f, 6, accent);
-    DrawCircle(bx + 16, by + 13, 4, COL_BG);
-    DrawText(algoName, bx + 26, by + 6, 14, COL_BG);
+    DrawCircle(bx + 18, by + 14, 5, COL_BG);
+    DT(algoName, bx + 30, by + 6, 15, COL_BG);
     const char* lbl = "ACTIVE PLANNER";
-    DrawText(lbl, bx - MeasureText(lbl, 11) - 12, by + 8, 11, COL_TXT_FAINT);
+    DT(lbl, bx - MT(lbl, 12) - 14, by + 8, 12, COL_TXT_FAINT);
 }
 
 // ---------------------------------------------------------------------------
@@ -916,38 +930,38 @@ void DrawComparisonOverlay(void) {
 // ---------------------------------------------------------------------------
 
 void DrawRightRail(void) {
-    int cardX = 832, cardW = 540, lx = cardX + 14, rowW = cardW - 28;
+    int cardX = 832, cardW = 600, lx = cardX + 16, rowW = cardW - 32;
     Color accent = useAstarPlanner ? COL_ASTAR : COL_DIJKSTRA;
 
     // ---- CARD 1: MISSION STATE -------------------------------------------------
-    int c1 = DrawPanel(cardX, 60, cardW, 72, "MISSION STATE", COL_FRONTIER);
+    int c1 = DrawPanel(cardX, 60, cardW, 86, "MISSION STATE", COL_FRONTIER);
     if (currentState == STATE_SETUP) {
-        DrawText("SETUP - Map Editor", lx, c1, 16, COL_TXT);
-        DrawText("Draw the world, then commit with [ENTER].", lx, c1 + 20, 11, COL_TXT_FAINT);
+        DT("SETUP - Map Editor", lx, c1, 20, COL_TXT);
+        DT("Draw the world, then commit with [ENTER].", lx, c1 + 26, 14, COL_TXT_FAINT);
     } else if (currentState == STATE_WATERFLOW) {
-        DrawText("WATERFLOW - BFS Reachability", lx, c1, 15, COL_TXT);
-        DrawText("Flood-fill checks the goal is reachable.", lx, c1 + 20, 11, COL_TXT_FAINT);
+        DT("WATERFLOW - BFS Reachability", lx, c1, 18, COL_TXT);
+        DT("Flood-fill checks the goal is reachable.", lx, c1 + 26, 14, COL_TXT_FAINT);
     } else {
         Color sc = COL_SUCCESS; const char* st = "NORMAL";
         if (tick > 5 && tick < 12 && replans > 0) { sc = COL_DANGER; st = "CRITICAL / REPLAN"; }
         if (currentState == STATE_GAMEOVER) { sc = COL_SUCCESS; st = "MISSION COMPLETE"; }
-        DrawText(TextFormat("RUNNING  |  t = %.0f", current_time), lx, c1, 15, COL_TXT);
-        DrawText(st, lx, c1 + 20, 12, sc);
+        DT(TextFormat("RUNNING   |   t = %.0f", current_time), lx, c1, 19, COL_TXT);
+        DT(st, lx, c1 + 26, 15, sc);
     }
 
     // ---- CARD 2: ACTIVE ALGORITHM ---------------------------------------------
-    int c2 = DrawPanel(cardX, 140, cardW, 86, "ACTIVE ALGORITHM", accent);
-    DrawText("[A] switch planner   |   [C] compare both", lx, c2, 12, COL_TXT_DIM);
-    int bw = DrawBadge(lx, c2 + 20, "DIJKSTRA",
+    int c2 = DrawPanel(cardX, 156, cardW, 100, "ACTIVE ALGORITHM", accent);
+    DT("[A] switch planner    |    [C] compare both", lx, c2, 14, COL_TXT_DIM);
+    int bw = DrawBadge(lx, c2 + 26, "DIJKSTRA",
                        useAstarPlanner ? COL_PANEL_HEAD : COL_DIJKSTRA,
                        useAstarPlanner ? COL_TXT_DIM    : COL_BG);
-    DrawBadge(lx + bw + 10, c2 + 20, "A*",
+    DrawBadge(lx + bw + 12, c2 + 26, "A*",
               useAstarPlanner ? COL_ASTAR : COL_PANEL_HEAD,
               useAstarPlanner ? COL_BG    : COL_TXT_DIM);
 
     // ---- CARD 3: COMPLEXITY INSTRUMENTATION (live empirical counters) ----------
-    int c3 = DrawPanel(cardX, 234, cardW, 196, "COMPLEXITY INSTRUMENTATION", COL_PATH);
-    int sy = c3, step = 21;
+    int c3 = DrawPanel(cardX, 266, cardW, 244, "COMPLEXITY INSTRUMENTATION", COL_PATH);
+    int sy = c3, step = 26;
     if (currentState == STATE_SIMULATION || currentState == STATE_GAMEOVER) {
         DrawStatRow(lx, sy,           rowW, "Nodes expanded", TextFormat("%ld", liveStats.nodesExpanded), accent);
         DrawStatRow(lx, sy + step,    rowW, "Edges relaxed",  TextFormat("%ld", liveStats.edgesRelaxed),  COL_TXT);
@@ -967,124 +981,123 @@ void DrawRightRail(void) {
         Color rcc = waterflowComplete ? (mapIsSolvable ? COL_SUCCESS : COL_DANGER) : COL_WARN;
         DrawStatRow(lx, sy + step*3, rowW, "Reachability", rch, rcc);
         if (waterflowComplete && mapIsSolvable)
-            DrawText("[SPACE] start simulation", lx, sy + step*5, 14, COL_SUCCESS);
+            DT("[SPACE] start simulation", lx, sy + step*5, 17, COL_SUCCESS);
     } else {
         DrawStatRow(lx, sy,          rowW, "Nodes expanded", "-", COL_TXT_FAINT);
         DrawStatRow(lx, sy + step,   rowW, "Edges relaxed",  "-", COL_TXT_FAINT);
         DrawStatRow(lx, sy + step*2, rowW, "Heap pushes",    "-", COL_TXT_FAINT);
         DrawStatRow(lx, sy + step*3, rowW, "Peak frontier",  "-", COL_TXT_FAINT);
         DrawStatRow(lx, sy + step*4, rowW, "Path cost",      "-", COL_TXT_FAINT);
-        DrawText("Commit a map and run to populate metrics.", lx, sy + step*5 + 4, 12, COL_TXT_FAINT);
+        DT("Commit a map and run to populate metrics.", lx, sy + step*5 + 6, 14, COL_TXT_FAINT);
     }
 
     // ---- CARD 4: COMPLEXITY REFERENCE (theory) ---------------------------------
-    int c4 = DrawPanel(cardX, 438, cardW, 182, "COMPLEXITY REFERENCE  (theory)", COL_DIJKSTRA);
-    int ry = c4;
-    DrawText(TextFormat("V = R*C = %d cells     E = %d (~4V)", ROWS*COLS,
-                        2*(ROWS*(COLS-1) + COLS*(ROWS-1))), lx, ry, 13, COL_TXT_DIM);
-    DrawText("BFS", lx, ry+20, 13, COL_TXT);            DrawText("O(V+E)         space O(V)",  lx+96, ry+20, 13, COL_TXT_DIM);
-    DrawText("Dijkstra", lx, ry+38, 13, COL_DIJKSTRA);  DrawText("O((V+E) log V) space O(V)",  lx+96, ry+38, 13, COL_TXT_DIM);
-    DrawText("A*", lx, ry+56, 13, COL_ASTAR);           DrawText("O((V+E) log V)* space O(V)", lx+96, ry+56, 13, COL_TXT_DIM);
-    DrawText("Heap op", lx, ry+74, 13, COL_TXT);        DrawText("push/extract/decrease O(logV)", lx+96, ry+74, 13, COL_TXT_DIM);
-    DrawText("* admissible h = Manhattan  =>  A* optimal,", lx, ry+96, 12, COL_TXT_FAINT);
-    DrawText("  expands fewer nodes than Dijkstra ([C]).", lx, ry+112, 12, COL_TXT_FAINT);
+    int c4 = DrawPanel(cardX, 520, cardW, 222, "COMPLEXITY REFERENCE  (theory)", COL_DIJKSTRA);
+    int ry = c4, col2 = lx + 112;
+    DT(TextFormat("V = R*C = %d cells      E = %d (~4V)", ROWS*COLS,
+                        2*(ROWS*(COLS-1) + COLS*(ROWS-1))), lx, ry, 14, COL_TXT_DIM);
+    DT("BFS", lx, ry+24, 16, COL_TXT);            DT("O(V+E)          space O(V)",  col2, ry+24, 16, COL_TXT_DIM);
+    DT("Dijkstra", lx, ry+48, 16, COL_DIJKSTRA);  DT("O((V+E) log V)  space O(V)",  col2, ry+48, 16, COL_TXT_DIM);
+    DT("A*", lx, ry+72, 16, COL_ASTAR);           DT("O((V+E) log V)* space O(V)",  col2, ry+72, 16, COL_TXT_DIM);
+    DT("Heap op", lx, ry+96, 16, COL_TXT);        DT("push/extract/decrease O(logV)", col2, ry+96, 16, COL_TXT_DIM);
+    DT("* admissible h = Manhattan  =>  A* optimal,", lx, ry+126, 14, COL_TXT_FAINT);
+    DT("  expands fewer nodes than Dijkstra ([C]).", lx, ry+146, 14, COL_TXT_FAINT);
 
     // ---- CARD 5: LEGEND & CONTROLS --------------------------------------------
-    int c5 = DrawPanel(cardX, 628, cardW, 172, "LEGEND & CONTROLS", COL_TXT_DIM);
+    int c5 = DrawPanel(cardX, 752, cardW, 208, "LEGEND & CONTROLS", COL_TXT_DIM);
     int ly = c5;
     if (currentState == STATE_SETUP) {
         const char* tools[5] = {"[1] Wall", "[2] Hazard", "[3] Start", "[4] End", "[5] Eraser"};
         for (int k = 0; k < 5; k++) {
             Color tc = (currentInputMode == (InputMode)k) ? COL_FRONTIER : COL_TXT_DIM;
-            DrawText(tools[k], lx + (k%3)*170, ly + (k/3)*20, 14, tc);
+            DT(tools[k], lx + (k%3)*190, ly + (k/3)*26, 16, tc);
         }
-        DrawLegendItem(lx, ly + 48, COL_START, "Start");
-        DrawLegendItem(lx + 130, ly + 48, COL_END, "End");
-        DrawLegendItem(lx + 260, ly + 48, COL_HAZARD, "Hazard");
-        DrawText("LMB place  |  RMB clear  |  [ENTER] commit map", lx, ly + 74, 12, COL_TXT_FAINT);
-        DrawText("[R] hard reset   |   [BKSP] soft reset", lx, ly + 94, 12, COL_TXT_FAINT);
+        DrawLegendItem(lx, ly + 60, COL_START, "Start");
+        DrawLegendItem(lx + 150, ly + 60, COL_END, "End");
+        DrawLegendItem(lx + 300, ly + 60, COL_HAZARD, "Hazard");
+        DT("LMB place   |   RMB clear   |   [ENTER] commit map", lx, ly + 92, 14, COL_TXT_FAINT);
+        DT("[R] hard reset    |    [BKSP] soft reset", lx, ly + 116, 14, COL_TXT_FAINT);
     } else {
         DrawLegendItem(lx, ly,      COL_FRONTIER, "Search frontier (explored)");
-        DrawLegendItem(lx, ly + 18, COL_PATH,     "Agent path (safe)");
-        DrawLegendItem(lx, ly + 36, COL_HAZARD,   "Active hazard");
-        DrawLegendItem(lx + 250, ly + 36, COL_HAZARD_SOFT, "Future heat");
-        DrawLegendItem(lx, ly + 54, COL_DIJKSTRA_SOFT, "Dijkstra-only explored ([C])");
-        DrawLegendItem(lx, ly + 72, COL_ASTAR_SOFT, "A* explored / overlap ([C])");
-        DrawText("[A] toggle algorithm   |   [C] compare planners", lx, ly + 98, 12, COL_TXT_FAINT);
-        DrawText("[R] hard reset   |   [BKSP] soft reset", lx, ly + 116, 12, COL_TXT_FAINT);
+        DrawLegendItem(lx, ly + 24, COL_PATH,     "Agent path (safe)");
+        DrawLegendItem(lx, ly + 48, COL_HAZARD,   "Active hazard");
+        DrawLegendItem(lx + 290, ly + 48, COL_HAZARD_SOFT, "Future heat");
+        DrawLegendItem(lx, ly + 72, COL_DIJKSTRA_SOFT, "Dijkstra-only explored ([C])");
+        DrawLegendItem(lx, ly + 96, COL_ASTAR_SOFT, "A* explored / overlap ([C])");
+        DT("[A] toggle algorithm   |   [C] compare    [R]/[BKSP] reset", lx, ly + 124, 13, COL_TXT_FAINT);
     }
 }
 
-// Bottom analysis bar: empirical-vs-theory (left), live data structure (mid), event log (right).
+// Bottom-left analysis strip (under the grid): empirical-vs-theory on top, then the
+// live data-structure viz (left) and event log (right). Sits in x[0..808], y[808..bottom].
 void DrawAnalysisBar(void) {
-    DrawRectangle(0, 812, SCREEN_WIDTH, SCREEN_HEIGHT - 812, COL_BAR);
-    DrawRectangle(0, 812, SCREEN_WIDTH, 1, COL_PANEL_LINE);
+    int top = 808, barW = 808;
+    DrawRectangle(0, top, barW, SCREEN_HEIGHT - top, COL_BAR);
+    DrawRectangle(0, top, barW, 1, COL_PANEL_LINE);
+    DrawRectangle(barW, top, 1, SCREEN_HEIGHT - top, COL_PANEL_LINE);
 
     Color accent = useAstarPlanner ? COL_ASTAR : COL_DIJKSTRA;
 
-    // --- LEFT: empirical vs theoretical -------------------------------------
-    DrawText("ALGORITHM ANALYSIS  -  empirical vs theory", 40, 822, 13, COL_TXT_DIM);
-    DrawText(useAstarPlanner ? "A*  -  O((V+E) log V) worst; far fewer expansions in practice"
-                             : "DIJKSTRA  -  O((V+E) log V)", 40, 842, 13, accent);
-    DrawText(TextFormat("V = %d   E = %d   |   measured: expanded = %ld   relaxed = %ld",
-                        ROWS*COLS, 2*(ROWS*(COLS-1)+COLS*(ROWS-1)),
-                        liveStats.nodesExpanded, liveStats.edgesRelaxed), 40, 864, 13, COL_TXT);
+    // --- Row A: empirical vs theoretical (full width) -----------------------
+    DT("ALGORITHM ANALYSIS  -  empirical vs theory", 24, top + 12, 15, COL_TXT_DIM);
+    DT(useAstarPlanner ? "A*  -  O((V+E) log V) worst case; far fewer expansions in practice"
+                       : "DIJKSTRA  -  O((V+E) log V)", 24, top + 36, 16, accent);
     float pct = (100.0f * (float)liveStats.nodesExpanded) / (float)(ROWS*COLS);
-    DrawText(TextFormat("Frontier touched %.1f%% of grid   (lower = better-informed search)", pct),
-             40, 886, 12, COL_TXT_DIM);
+    DT(TextFormat("V=%d   E=%d   |   expanded=%ld   relaxed=%ld   |   frontier touched %.1f%%",
+                  ROWS*COLS, 2*(ROWS*(COLS-1)+COLS*(ROWS-1)),
+                  liveStats.nodesExpanded, liveStats.edgesRelaxed, pct), 24, top + 62, 14, COL_TXT);
 
-    // --- MIDDLE: live data-structure visualization --------------------------
-    int mx = 624;
-    DrawRectangle(mx - 16, 812, 1, SCREEN_HEIGHT - 812, COL_PANEL_LINE);
+    // --- Row B: data structure (left) + event log (right) -------------------
+    int by = top + 92;
+    DrawRectangle(24, by - 4, barW - 48, 1, COL_PANEL_LINE);
     if (currentState == STATE_WATERFLOW) {
-        DrawText("DATA STRUCTURE - Queue (FIFO)", mx, 822, 13, COL_TXT_DIM);
-        int bs = 20, gap = 4, count = 0;
+        DT("DATA STRUCTURE - Queue (FIFO)", 24, by, 14, COL_TXT_DIM);
+        int bs = 22, gap = 5, count = 0;
         for (int i = waterflowQueue.front; i < waterflowQueue.rear && count < 9; i++, count++) {
-            int x = mx + count * (bs + gap), y = 850;
-            DrawRectangle(x, y, bs, bs, Fade(COL_DIJKSTRA, 0.30f));
-            DrawRectangleLines(x, y, bs, bs, COL_DIJKSTRA);
-            if (i == waterflowQueue.front) DrawText("H", x + 6, y + 4, 11, COL_TXT);
+            int x = 24 + count * (bs + gap), yy = by + 24;
+            DrawRectangle(x, yy, bs, bs, Fade(COL_DIJKSTRA, 0.30f));
+            DrawRectangleLines(x, yy, bs, bs, COL_DIJKSTRA);
+            if (i == waterflowQueue.front) DT("H", x + 6, yy + 4, 13, COL_TXT);
         }
-        DrawText(TextFormat("size = %d   (head -> tail)", waterflowQueue.rear - waterflowQueue.front),
-                 mx, 880, 12, COL_TXT_FAINT);
+        DT(TextFormat("size = %d   (head -> tail)", waterflowQueue.rear - waterflowQueue.front), 24, by + 54, 13, COL_TXT_FAINT);
     } else if (currentState == STATE_SIMULATION || currentState == STATE_GAMEOVER) {
-        DrawText("DATA STRUCTURE - Linked List (plan)", mx, 822, 13, COL_TXT_DIM);
-        PathNode* t = currentPlan; int bs = 20, gap = 14, count = 0;
-        while (t && count < 7) {
-            int x = mx + count * (bs + gap), y = 850;
-            DrawRectangle(x, y, bs, bs, Fade(COL_PATH, 0.35f));
-            DrawRectangleLines(x, y, bs, bs, COL_PATH);
-            if (t->next && count < 6) DrawLine(x + bs, y + bs/2, x + bs + gap, y + bs/2, COL_TXT_DIM);
+        DT("DATA STRUCTURE - Linked List (plan)", 24, by, 14, COL_TXT_DIM);
+        PathNode* t = currentPlan; int bs = 22, gap = 16, count = 0;
+        while (t && count < 6) {
+            int x = 24 + count * (bs + gap), yy = by + 24;
+            DrawRectangle(x, yy, bs, bs, Fade(COL_PATH, 0.35f));
+            DrawRectangleLines(x, yy, bs, bs, COL_PATH);
+            if (t->next && count < 5) DrawLine(x + bs, yy + bs/2, x + bs + gap, yy + bs/2, COL_TXT_DIM);
             t = t->next; count++;
         }
-        if (t) DrawText("...", mx + count * (bs + gap), 854, 16, COL_TXT_DIM);
-        DrawText("agent's planned path (next cells)", mx, 880, 12, COL_TXT_FAINT);
+        if (t) DT("...", 24 + count * (bs + gap), by + 28, 18, COL_TXT_DIM);
+        DT("agent's planned path (next cells)", 24, by + 54, 13, COL_TXT_FAINT);
     } else {
-        DrawText("DATA STRUCTURE - live", mx, 822, 13, COL_TXT_DIM);
-        DrawText("Queue (BFS) and Linked List (path)", mx, 850, 12, COL_TXT_FAINT);
-        DrawText("appear once the simulation runs.", mx, 868, 12, COL_TXT_FAINT);
+        DT("DATA STRUCTURE - live", 24, by, 14, COL_TXT_DIM);
+        DT("Queue (BFS) and Linked List (path) appear", 24, by + 26, 13, COL_TXT_FAINT);
+        DT("once the simulation runs.", 24, by + 46, 13, COL_TXT_FAINT);
     }
 
-    // --- RIGHT: event log ----------------------------------------------------
-    int rx = 1040;
-    DrawRectangle(rx - 16, 812, 1, SCREEN_HEIGHT - 812, COL_PANEL_LINE);
-    DrawText("EVENT LOG", rx, 822, 13, COL_TXT_DIM);
+    // Event log (right portion of row B)
+    int rx = 430;
+    DrawRectangle(rx - 16, by - 4, 1, SCREEN_HEIGHT - (by - 4), COL_PANEL_LINE);
+    DT("EVENT LOG", rx, by, 14, COL_TXT_DIM);
     const char* msg = (currentState == STATE_SIMULATION || currentState == STATE_GAMEOVER)
                       ? eventMessage : "Awaiting simulation...";
-    DrawText(msg, rx, 846, 16, COL_WARN);
-    if (comparisonActive) DrawText("COMPARISON MODE ACTIVE - see overlay", rx, 874, 12, COL_FRONTIER);
+    DT(msg, rx, by + 26, 16, COL_WARN);
+    if (comparisonActive) DT("COMPARISON MODE ACTIVE - see overlay", rx, by + 52, 13, COL_FRONTIER);
 }
 
 // Floating head-to-head results card (shown over the grid during comparison).
 void DrawComparisonCard(void) {
-    int x = 120, y = 230, w = 600, h = 320;
-    int cy = DrawPanel(x, y, w, h, "DIJKSTRA  vs  A*   -   HEAD TO HEAD", COL_FRONTIER);
-    int lx = x + 18, colD = x + 340, colA = x + 470, step = 30;
+    int x = 90, y = 200, w = 680, h = 360;
+    int cy = DrawPanel(x, y, w, h, "DIJKSTRA  vs  A*    -    HEAD TO HEAD", COL_FRONTIER);
+    int lx = x + 20, colD = x + 380, colA = x + 540;
 
-    DrawText("METRIC", lx, cy, 13, COL_TXT_DIM);
-    DrawText("DIJKSTRA", colD, cy, 13, COL_DIJKSTRA);
-    DrawText("A*", colA, cy, 13, COL_ASTAR);
-    cy += step;
+    DT("METRIC", lx, cy, 15, COL_TXT_DIM);
+    DT("DIJKSTRA", colD, cy, 15, COL_DIJKSTRA);
+    DT("A*", colA, cy, 15, COL_ASTAR);
+    cy += 30;
 
     const char* labels[6] = {"Nodes expanded","Edges relaxed","Heap pushes","Peak frontier","Path cost","Path length"};
     long dv[6] = {cmpDijkstra.nodesExpanded, cmpDijkstra.edgesRelaxed, cmpDijkstra.heapPushes,
@@ -1092,31 +1105,31 @@ void DrawComparisonCard(void) {
     long av[6] = {cmpAstar.nodesExpanded, cmpAstar.edgesRelaxed, cmpAstar.heapPushes,
                   cmpAstar.peakFrontier, (long)cmpAstar.pathCost, cmpAstar.pathLength};
     for (int i = 0; i < 6; i++) {
-        DrawText(labels[i], lx, cy, 14, COL_TXT_DIM);
-        DrawText(TextFormat("%ld", dv[i]), colD, cy, 14, COL_TXT);
-        DrawText(TextFormat("%ld", av[i]), colA, cy, 14, COL_TXT);
-        cy += 22;
+        DT(labels[i], lx, cy, 17, COL_TXT_DIM);
+        DT(TextFormat("%ld", dv[i]), colD, cy, 17, COL_TXT);
+        DT(TextFormat("%ld", av[i]), colA, cy, 17, COL_TXT);
+        cy += 28;
     }
-    cy += 6;
+    cy += 8;
     if (cmpDijkstra.success && cmpAstar.success) {
         long saved = cmpDijkstra.nodesExpanded - cmpAstar.nodesExpanded;
         double pct = cmpDijkstra.nodesExpanded ? 100.0*(double)saved/(double)cmpDijkstra.nodesExpanded : 0.0;
-        DrawText(cmpOptimalMatch ? "OPTIMALITY: VERIFIED - identical optimal cost (both correct)"
+        DT(cmpOptimalMatch ? "OPTIMALITY: VERIFIED - identical optimal cost (both correct)"
                                  : "OPTIMALITY: MISMATCH (check admissibility)",
-                 lx, cy, 14, cmpOptimalMatch ? COL_SUCCESS : COL_DANGER);
+                 lx, cy, 16, cmpOptimalMatch ? COL_SUCCESS : COL_DANGER);
         if (saved > 0)
-            DrawText(TextFormat("A* expanded %ld fewer nodes  (%.1f%% reduction). Heuristic pays off.", saved, pct),
-                     lx, cy + 22, 14, COL_FRONTIER);
+            DT(TextFormat("A* expanded %ld fewer nodes  (%.1f%% reduction). Heuristic pays off.", saved, pct),
+                     lx, cy + 26, 16, COL_FRONTIER);
         else if (saved < 0)
-            DrawText(TextFormat("A* expanded %ld more nodes here (tie-break overhead) - cost still optimal.", -saved),
-                     lx, cy + 22, 13, COL_WARN);
+            DT(TextFormat("A* expanded %ld more nodes here (tie-break overhead) - cost still optimal.", -saved),
+                     lx, cy + 26, 15, COL_WARN);
         else
-            DrawText("Equal expansions: forced/funnel map - the heuristic cannot prune here.",
-                     lx, cy + 22, 13, COL_WARN);
+            DT("Equal expansions: forced/funnel map - the heuristic cannot prune here.",
+                     lx, cy + 26, 15, COL_WARN);
     } else {
-        DrawText("NO SAFE PATH from current cell - comparison N/A.", lx, cy, 14, COL_DANGER);
+        DT("NO SAFE PATH from current cell - comparison N/A.", lx, cy, 16, COL_DANGER);
     }
-    DrawText("[C] dismiss", lx, y + h - 24, 12, COL_TXT_FAINT);
+    DT("[C] dismiss", lx, y + h - 28, 14, COL_TXT_FAINT);
 }
 
 // ---------------------------------------------------------------------------
@@ -1161,6 +1174,13 @@ void UpdateWaterflow(Point end) {
 int main() {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Temporal Navigator - Design & Analysis of Algorithms");
     SetTargetFPS(60);
+
+    // Load a crisp anti-aliased UI font (downscaled from a large base size for sharpness).
+    // Prefer Segoe UI, then Consolas; fall back to raylib's built-in font if neither exists.
+    g_font = LoadFontEx("C:\\Windows\\Fonts\\segoeui.ttf", 48, NULL, 0);
+    if (g_font.texture.id == 0) g_font = LoadFontEx("C:\\Windows\\Fonts\\consola.ttf", 48, NULL, 0);
+    if (g_font.texture.id == 0) g_font = GetFontDefault();
+    SetTextureFilter(g_font.texture, TEXTURE_FILTER_BILINEAR);
 
     // Initial Setup
     agentPos = startVal;
@@ -1286,7 +1306,7 @@ int main() {
                 DrawRectangle(endVal.y   * CELL_SIZE + 50, endVal.x   * CELL_SIZE + 50, CELL_SIZE, CELL_SIZE, Fade(COL_END, 0.5f));
 
                 if (currentState == STATE_GAMEOVER) {
-                    DrawBadge(640, 28, "MISSION SUCCESS", COL_SUCCESS, COL_BG);
+                    DrawBadge(290, 62, "MISSION SUCCESS", COL_SUCCESS, COL_BG);
                 }
             }
 
